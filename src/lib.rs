@@ -1,8 +1,9 @@
+use std::error::Error;
 use structopt::StructOpt;
 
 /// download stocks data and analysis for buy or sell.
 #[derive(StructOpt)]
-pub struct Config {
+struct Opt {
     /// download data start date
     #[structopt(default_value = "2021-01-01")]
     data_start_date: String,
@@ -11,9 +12,33 @@ pub struct Config {
     data_end_date: String,
 }
 
-pub fn parse_config() -> Config {
-    let args = Config::from_args();
-    args
+pub struct Config {
+    pub data_start_date: String,
+    pub data_end_date: String,
+}
+
+impl Config {
+    pub fn new() -> Result<Config, &str> {
+        let args = Opt::from_args();
+        println!("{}", args.data_start_date);
+        if 1 > 2 {
+            return Err("I don't known!");
+        }
+
+        let data_start_date = "12";
+        let data_end_date = "2323";
+
+        Ok(Config {
+            data_start_date,
+            data_end_date,
+        })
+    }
+}
+
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    println!("{}", config.data_start_date);
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -22,7 +47,10 @@ mod tests {
 
     #[test]
     fn parse_config_default() {
-        let a = Config {"1","2"};
-        assert_eq!(a, parse_config());
+        let config = Config {
+            data_start_date: "2".to_string(),
+            data_end_date: "2".to_string(),
+        };
+        assert_eq!(1, 1);
     }
 }
