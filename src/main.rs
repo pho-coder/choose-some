@@ -1,9 +1,12 @@
 use std::process;
 
-use choose_some::Config;
+use choose_some::{Config, Opt};
+use structopt::StructOpt;
 
 fn main() {
-    let config = Config::new().unwrap_or_else(|err| {
+    let args = Opt::from_args();
+
+    let config = Config::new(args).unwrap_or_else(|err| {
         eprintln!("Problem parsing arguments: {}", err);
         process::exit(1);
     });
