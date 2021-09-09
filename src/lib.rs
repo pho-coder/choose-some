@@ -1,5 +1,8 @@
-use std::error::Error;
+use std::env;
 use structopt::StructOpt;
+
+mod crawl_data;
+use crawl_data::crawl;
 
 /// download stocks data and analysis for buy or sell.
 #[derive(StructOpt)]
@@ -16,6 +19,7 @@ pub struct Opt {
 pub struct Config {
     pub data_start_date: String,
     pub data_end_date: String,
+    pub tushare_token: String,
 }
 
 impl Config {
@@ -28,15 +32,25 @@ impl Config {
             return Err(result);
         }
 
+        let tushare_token = env::var("TUSHARE_TOKEN").unwrap();
+        if tushare_token.eq("") {
+            return Err(String::from("NO TUSHARE_TOKEN!"));
+        }
+
         Ok(Config {
             data_start_date,
             data_end_date,
+            tushare_token,
         })
     }
 }
 
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+pub fn run(config: Config) -> Result<(), String> {
     println!("{} {}", config.data_start_date, config.data_end_date);
+    if let Err(e) = crawl::run(config) {
+        eprintln!("Application error: {}", e);
+        return Err("crawl error!".to_owned());
+    }
 
     Ok(())
 }
@@ -52,12 +66,14 @@ mod tests {
             data_end_date: String::from("2021-09-01"),
         };
         let config = Config::new(args).unwrap();
+        let tushare_token = env::var("TUSHARE_TOKEN").unwrap();
 
         assert_eq!(
             config,
             Config {
                 data_start_date: String::from("2021-01-01"),
                 data_end_date: String::from("2021-09-01"),
+                tushare_token: tushare_token,
             }
         );
 
@@ -66,6 +82,7 @@ mod tests {
             Config {
                 data_start_date: String::from("2019-01-01"),
                 data_end_date: String::from("2021-09-01"),
+                tushare_token: String::from(""),
             }
         );
     }
