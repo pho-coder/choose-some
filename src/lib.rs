@@ -8,11 +8,11 @@ use crawl_data::crawl;
 #[derive(StructOpt)]
 pub struct Opt {
     /// download data start date
-    #[structopt(short = "s", long = "data-start-date", default_value = "2021-01-01")]
+    #[structopt(short = "s", long = "data-start-date", default_value = "20210101")]
     data_start_date: String,
 
     /// download data end date
-    #[structopt(short = "e", long = "data-end-date", default_value = "2021-09-01")]
+    #[structopt(short = "e", long = "data-end-date", default_value = "20210901")]
     data_end_date: String,
 }
 #[derive(PartialEq, Debug)]
@@ -26,7 +26,7 @@ impl Config {
     pub fn new(args: Opt) -> Result<Config, String> {
         let data_start_date = args.data_start_date.clone();
         let data_end_date = args.data_end_date.clone();
-        if data_start_date < "2020-01-01".to_string() {
+        if data_start_date < "20200101".to_string() {
             let mut result = String::from("data start date is error! ");
             result = result + &data_start_date;
             return Err(result);
@@ -62,8 +62,8 @@ mod tests {
     #[test]
     fn parse_config() {
         let args = Opt {
-            data_start_date: String::from("2021-01-01"),
-            data_end_date: String::from("2021-09-01"),
+            data_start_date: String::from("20210101"),
+            data_end_date: String::from("20210901"),
         };
         let config = Config::new(args).unwrap();
         let tushare_token = env::var("TUSHARE_TOKEN").unwrap();
@@ -71,8 +71,8 @@ mod tests {
         assert_eq!(
             config,
             Config {
-                data_start_date: String::from("2021-01-01"),
-                data_end_date: String::from("2021-09-01"),
+                data_start_date: String::from("20210101"),
+                data_end_date: String::from("20210901"),
                 tushare_token: tushare_token,
             }
         );
@@ -80,8 +80,8 @@ mod tests {
         assert_ne!(
             config,
             Config {
-                data_start_date: String::from("2019-01-01"),
-                data_end_date: String::from("2021-09-01"),
+                data_start_date: String::from("20190101"),
+                data_end_date: String::from("20210901"),
                 tushare_token: String::from(""),
             }
         );
