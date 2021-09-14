@@ -4,6 +4,8 @@ use choose_some::{Config, Opt};
 use structopt::StructOpt;
 
 fn main() {
+    env_logger::init();
+
     let args = Opt::from_args();
 
     let config = Config::new(args).unwrap_or_else(|err| {
@@ -11,7 +13,7 @@ fn main() {
         process::exit(1);
     });
 
-    if let Err(e) = choose_some::run(config) {
+    if let Err(e) = choose_some::run(&config) {
         eprintln!("Application error: {}", e);
         process::exit(1);
     }

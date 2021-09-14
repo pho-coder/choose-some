@@ -20,6 +20,7 @@ pub struct Config {
     pub data_start_date: String,
     pub data_end_date: String,
     pub tushare_token: String,
+    pub data_dir: String,
 }
 
 impl Config {
@@ -37,15 +38,21 @@ impl Config {
             return Err(String::from("NO TUSHARE_TOKEN!"));
         }
 
+        let data_dir = env::var("DATA_DIR").unwrap();
+        if data_dir.eq("") {
+            return Err(String::from("NO DATA_DIR!"));
+        }
+
         Ok(Config {
             data_start_date,
             data_end_date,
             tushare_token,
+            data_dir,
         })
     }
 }
 
-pub fn run(config: Config) -> Result<(), String> {
+pub fn run(config: &Config) -> Result<(), String> {
     println!("{} {}", config.data_start_date, config.data_end_date);
     if let Err(e) = crawl::run(config) {
         eprintln!("Application error: {}", e);
@@ -67,6 +74,7 @@ mod tests {
         };
         let config = Config::new(args).unwrap();
         let tushare_token = env::var("TUSHARE_TOKEN").unwrap();
+        let data_dir = env::var("DATA_DIR").unwrap();
 
         assert_eq!(
             config,
@@ -74,6 +82,7 @@ mod tests {
                 data_start_date: String::from("20210101"),
                 data_end_date: String::from("20210901"),
                 tushare_token: tushare_token,
+                data_dir: data_dir,
             }
         );
 
@@ -83,6 +92,7 @@ mod tests {
                 data_start_date: String::from("20190101"),
                 data_end_date: String::from("20210901"),
                 tushare_token: String::from(""),
+                data_dir: String::from(""),
             }
         );
     }
