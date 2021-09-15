@@ -67,6 +67,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore]
     fn parse_config() {
         let args = Opt {
             data_start_date: String::from("20210101"),
