@@ -11,6 +11,8 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fs;
+use std::io::BufRead;
+use std::io::BufReader;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -45,7 +47,7 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
 
     // wrtie stocks_list
     let file_name = date_dir.join("stocks_list");
-    write_stock_basic(file_name.to_str().unwrap(), &stocks_basic)?;
+    write_stocks_list(file_name.to_str().unwrap(), &stocks_basic)?;
 
     Ok(())
 }
@@ -147,6 +149,30 @@ struct StockBasic {
 }
 
 impl StockBasic {
+    fn new(a_vec: Vec<String>) -> StockBasic {
+        StockBasic {
+            ts_code: a_vec[0].clone(),
+            symbol: a_vec[1].clone(),
+            name: a_vec[2].clone(),
+            area: a_vec[3].clone(),
+            industry: a_vec[4].clone(),
+            fullname: a_vec[5].clone(),
+            enname: a_vec[6].clone(),
+            cnspell: a_vec[7].clone(),
+            market: a_vec[8].clone(),
+            exchange: a_vec[9].clone(),
+            curr_type: a_vec[10].clone(),
+            list_status: a_vec[11].clone(),
+            list_date: a_vec[12].clone(),
+            delist_date: if a_vec[13] == "null" {
+                None
+            } else {
+                Some(a_vec[13].clone())
+            },
+            is_hs: a_vec[14].clone(),
+        }
+    }
+
     fn to_vec(&self) -> Vec<String> {
         vec![
             self.ts_code.clone(),
@@ -172,7 +198,16 @@ impl StockBasic {
     }
 
     fn to_string(&self) -> String {
-        self.to_vec().join(",")
+        self.to_vec().join("\t")
+    }
+
+    fn string2vec(a_string: String) -> Vec<String> {
+        a_string.split("\t").map(|s| s.to_string()).collect()
+    }
+
+    fn from_string(a_string: String) -> StockBasic {
+        let a_vec = StockBasic::string2vec(a_string);
+        StockBasic::new(a_vec)
     }
 }
 
@@ -254,20 +289,35 @@ fn get_stock_basic(
     Ok(stocks_base_vec)
 }
 
-fn write_stock_basic(
+fn write_stocks_list(
     file_name: &str,
     stocks_basic_vec: &Vec<StockBasic>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     debug!("{}", stocks_basic_vec.len());
 
     let mut file = fs::File::create(file_name).unwrap();
-    write!(&mut file, "ts_code,symbol,name,area,industry,fullname,enname,cnspell,market,exchange,curr_type,list_status,list_date,delist_date,is_hs\n").unwrap();
+    write!(&mut file, "ts_code\tsymbol\tname\tarea\tindustry\tfullname\tenname\tcnspell\tmarket\texchange\tcurr_type\tlist_status\tlist_date\tdelist_date\tis_hs\n").unwrap();
     for stock_basic in stocks_basic_vec {
         let stock_basic_string = stock_basic.to_string();
         write!(&mut file, "{}{}", stock_basic_string, "\n").unwrap();
     }
 
     Ok(())
+}
+
+fn read_stocks_list(file_name: &str) -> Result<Vec<StockBasic>, MyError> {
+    let file = fs::File::open(file_name).unwrap();
+    let file_buffered = BufReader::new(file);
+    let mut lines = file_buffered.lines();
+    let mut a_vec: Vec<StockBasic> = vec![];
+    // skip first line
+    lines.next();
+    for line in lines {
+        a_vec.push(StockBasic::from_string(line.unwrap()));
+    }
+    debug!("{:?}", a_vec[0]);
+    debug!("{:?}", a_vec[a_vec.len() - 1]);
+    Ok(a_vec)
 }
 
 #[cfg(test)]
@@ -334,6 +384,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_write_stocks_basic() {
         env_logger::init();
         use chrono::offset::Local;
@@ -355,7 +406,15 @@ mod tests {
         let file_name = date_dir.join("stocks_list");
 
         let stocks_basic_vec = get_stock_basic(config, "SSE", "主板").unwrap();
-        let result = write_stock_basic(file_name.to_str().unwrap(), &stocks_basic_vec).unwrap();
+        let result = write_stocks_list(file_name.to_str().unwrap(), &stocks_basic_vec).unwrap();
         assert_eq!(result, ());
+    }
+
+    #[test]
+    #[ignore]
+    fn test_read_stocks_list() {
+        env_logger::init();
+        let file_name = "/Users/phoenix/data/20210917/stocks_list";
+        assert!(read_stocks_list(file_name).unwrap().len() > 1);
     }
 }
