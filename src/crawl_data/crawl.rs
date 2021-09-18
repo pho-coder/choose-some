@@ -7,6 +7,7 @@ use crate::Config;
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::any::type_name;
+use std::clone;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -34,10 +35,10 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
     info!("{} {}", config.data_start_date, config.data_end_date);
     let data_dir = Path::new(&config.data_dir);
     let (earliest_trade_date, latest_trade_date) = crawl_trade_cal(config).unwrap();
-    let date_dir = data_dir.join(latest_trade_date);
+    let date_dir = data_dir.join(&latest_trade_date);
 
     // init dir
-    init_dir(&date_dir)?;
+    let hist_data_dir = init_dir(&date_dir)?;
 
     let token = config.tushare_token.to_owned();
     // get stocks list
@@ -47,15 +48,20 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
     stocks_basic.append(&mut szse_stocks_basic);
 
     // wrtie stocks_list
-    let file_name = date_dir.join("stocks_list");
-    let file_name_str = file_name.to_str().unwrap();
-    write_stocks_list(file_name_str, &stocks_basic)?;
+    let stocks_list_file_name = date_dir.join("stocks_list");
+    write_stocks_list(&stocks_list_file_name, &stocks_basic)?;
 
     // read stocks_list
-    let stocks_basic = read_stocks_list(file_name_str).unwrap();
+    let stocks_basic = read_stocks_list(&stocks_list_file_name).unwrap();
 
     // download stocks basic and write local files
-    // download_stocks_daily(token, stocks_basic, earliest_trade_date, latest_trade_date)?;
+    download_stocks_daily(
+        &hist_data_dir,
+        &token,
+        stocks_basic,
+        &earliest_trade_date,
+        &latest_trade_date,
+    )?;
 
     Ok(())
 }
@@ -127,7 +133,7 @@ fn crawl_trade_cal(config: &Config) -> Result<(String, String), Box<dyn std::err
     ))
 }
 
-fn init_dir(date_dir: &PathBuf) -> Result<(), Box<dyn Error>> {
+fn init_dir(date_dir: &PathBuf) -> Result<PathBuf, Box<dyn Error>> {
     debug!("{:?}", date_dir);
 
     if date_dir.exists() {
@@ -139,7 +145,7 @@ fn init_dir(date_dir: &PathBuf) -> Result<(), Box<dyn Error>> {
     let hist_data_dir = date_dir.join("hist_data");
     fs::create_dir(&hist_data_dir).unwrap();
 
-    Ok(())
+    Ok(hist_data_dir)
 }
 
 #[derive(Debug)]
@@ -303,7 +309,7 @@ fn crawl_stocks_basic(
 }
 
 fn write_stocks_list(
-    file_name: &str,
+    file_name: &PathBuf,
     stocks_basic_vec: &Vec<StockBasic>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     debug!("{}", stocks_basic_vec.len());
@@ -318,7 +324,7 @@ fn write_stocks_list(
     Ok(())
 }
 
-fn read_stocks_list(file_name: &str) -> Result<Vec<StockBasic>, MyError> {
+fn read_stocks_list(file_name: &PathBuf) -> Result<Vec<StockBasic>, MyError> {
     let file = fs::File::open(file_name).unwrap();
     let file_buffered = BufReader::new(file);
     let mut lines = file_buffered.lines();
@@ -333,19 +339,27 @@ fn read_stocks_list(file_name: &str) -> Result<Vec<StockBasic>, MyError> {
     Ok(a_vec)
 }
 
+fn write_stock_daily(
+    file_name: &str,
+    stock_daily_vec: &Vec<StockBasic>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    Ok(())
+}
+
 // max crawl months is 23, if want to crawl 10 codes everytime.
 fn download_stocks_daily(
+    hist_data_dir: &PathBuf,
     token: &str,
     stocks_basic: Vec<StockBasic>,
     start_date: &str,
     end_date: &str,
-) {
+) -> Result<(), Box<dyn std::error::Error>> {
     info!("will download {} stocks daily", stocks_basic.len());
-    let MAX_CODES = 10;
+    let max_codes = 10;
     let mut ts_code_grouped: Vec<Vec<String>> = vec![];
     let mut current_ts_codes_grouped: Vec<String> = vec![];
     for stock_basic in stocks_basic {
-        if ts_code_grouped.len() == MAX_CODES {
+        if ts_code_grouped.len() == max_codes {
             ts_code_grouped.push(current_ts_codes_grouped);
             current_ts_codes_grouped = vec![];
             current_ts_codes_grouped.push(stock_basic.ts_code);
@@ -359,11 +373,28 @@ fn download_stocks_daily(
 
     for ts_codes_group in ts_code_grouped {
         let stocks_daily_vec =
-            crawl_stocks_daily(token, ts_codes_group, start_date, end_date).unwrap();
+            crawl_stocks_daily(token, ts_codes_group.clone(), start_date, end_date).unwrap();
+        for ts_code in ts_codes_group {
+            let file_name = hist_data_dir.join(ts_code);
+            let one_stock_daily: Vec<StockDaily> = stocks_daily_vec
+                .iter()
+                .filter(|s| s.ts_code == ts_code.to_string())
+                .cloned()
+                .collect();
+            // write one stock hist data
+            let mut file = fs::File::create(file_name).unwrap();
+            write!(&mut file, "ts_code\ttrade_date\topen\thigh\tlow\tclose\tpre_close\tchange\tpct_chg\tvol\tamount\n").unwrap();
+            for stock_daily in one_stock_daily {
+                let stock_daily_string = stock_daily.to_string();
+                write!(&mut file, "{}{}", stock_daily_string, "\n").unwrap();
+            }
+        }
     }
+
+    Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct StockDaily {
     ts_code: String,
     trade_date: String,
@@ -376,6 +407,28 @@ struct StockDaily {
     pct_chg: f64,
     vol: f64,
     amount: f64,
+}
+
+impl StockDaily {
+    fn to_vec(&self) -> Vec<String> {
+        vec![
+            String::from(self.ts_code),
+            String::from(self.trade_date),
+            self.open.to_string(),
+            self.high.to_string(),
+            self.low.to_string(),
+            self.close.to_string(),
+            self.pre_close.to_string(),
+            self.change.to_string(),
+            self.pct_chg.to_string(),
+            self.vol.to_string(),
+            self.amount.to_string(),
+        ]
+    }
+
+    fn to_string(&self) -> String {
+        self.to_vec().join("\t")
+    }
 }
 
 // 每分钟内最多调取500次，每次5000条数据. so max crawl months is 23, if want to crawl 10 codes everytime.
@@ -481,7 +534,7 @@ mod tests {
         let config = Config::new(args).unwrap();
         let date_dir = Path::new(&config.data_dir).join("20990101".to_owned());
 
-        assert_eq!(init_dir(&date_dir).unwrap(), ());
+        assert_eq!(init_dir(&date_dir).unwrap(), date_dir.join("hist_data"));
     }
 
     #[test]
