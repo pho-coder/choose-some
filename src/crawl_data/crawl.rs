@@ -33,21 +33,29 @@ impl Error for MyError {}
 pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
     info!("{} {}", config.data_start_date, config.data_end_date);
     let data_dir = Path::new(&config.data_dir);
-    let trade_date = get_latest_trade_cal(config).unwrap();
-    let date_dir = data_dir.join(trade_date);
+    let (earliest_trade_date, latest_trade_date) = crawl_trade_cal(config).unwrap();
+    let date_dir = data_dir.join(latest_trade_date);
 
     // init dir
     init_dir(&date_dir)?;
 
+    let token = config.tushare_token.to_owned();
     // get stocks list
-    let sse_stocks_basic = get_stock_basic(config, "SSE", "主板")?;
-    let mut szse_stocks_basic = get_stock_basic(config, "SZSE", "主板")?;
+    let sse_stocks_basic = crawl_stocks_basic(&token, "SSE", "主板")?;
+    let mut szse_stocks_basic = crawl_stocks_basic(&token, "SZSE", "主板")?;
     let mut stocks_basic = sse_stocks_basic;
     stocks_basic.append(&mut szse_stocks_basic);
 
     // wrtie stocks_list
     let file_name = date_dir.join("stocks_list");
-    write_stocks_list(file_name.to_str().unwrap(), &stocks_basic)?;
+    let file_name_str = file_name.to_str().unwrap();
+    write_stocks_list(file_name_str, &stocks_basic)?;
+
+    // read stocks_list
+    let stocks_basic = read_stocks_list(file_name_str).unwrap();
+
+    // download stocks basic and write local files
+    download_stocks_basic(token, )
 
     Ok(())
 }
@@ -60,7 +68,7 @@ struct TushareRESTfulAPI {
     fields: String,
 }
 
-fn get_latest_trade_cal(config: &Config) -> Result<String, Box<dyn std::error::Error>> {
+fn crawl_trade_cal(config: &Config) -> Result<(String, String), Box<dyn std::error::Error>> {
     let mut params: HashMap<String, String> = HashMap::new();
     params.insert("exchange".to_owned(), "SSE".to_owned());
     params.insert("start_date".to_owned(), config.data_start_date.to_owned());
@@ -109,9 +117,14 @@ fn get_latest_trade_cal(config: &Config) -> Result<String, Box<dyn std::error::E
     for i in items.iter() {
         cal_date_vec.push(i[1].as_str().unwrap());
     }
+
+    let earliest_trade_date = cal_date_vec.iter().min().unwrap();
     let latest_trade_date = cal_date_vec.iter().max().unwrap();
 
-    Ok(String::from(latest_trade_date.clone()))
+    Ok((
+        String::from(earliest_trade_date.clone()),
+        String::from(latest_trade_date.clone()),
+    ))
 }
 
 fn init_dir(date_dir: &PathBuf) -> Result<(), Box<dyn Error>> {
@@ -211,8 +224,10 @@ impl StockBasic {
     }
 }
 
-fn get_stock_basic(
-    config: &Config,
+fn download_stocks_basic() {}
+
+fn crawl_stocks_basic(
+    token: &str,
     exchange: &str,
     market: &str,
 ) -> Result<Vec<StockBasic>, Box<dyn std::error::Error>> {
@@ -222,7 +237,7 @@ fn get_stock_basic(
     params.insert("list_status".to_owned(), "L".to_owned());
     let api_params = TushareRESTfulAPI {
         api_name: String::from("stock_basic"),
-        token: config.tushare_token.to_owned(),
+        token: token.to_owned(),
         params: params,
         fields: String::from("ts_code, symbol, name, area, industry, fullname, enname, cnspell, market, exchange, curr_type, list_status, list_date, delist_date, is_hs"),
     };
@@ -320,6 +335,42 @@ fn read_stocks_list(file_name: &str) -> Result<Vec<StockBasic>, MyError> {
     Ok(a_vec)
 }
 
+#[derive(Debug)]
+struct StockDaily {
+    ts_code: String,
+    trade_date: String,
+    open: f64,
+    high: f64,
+    low: f64,
+    close: f64,
+    pre_close: f64,
+    change: f64,
+    pct_chg: f64,
+    vol: f64,
+    amount: f64,
+}
+
+// 每分钟内最多调取500次，每次5000条数据. so max crawl months is 23, if want to crawl 10 codes everytime.
+fn crawl_stocks_daily(
+    token: &str,
+    ts_codes: Vec<&str>,
+    start_date: &str,
+    end_date: &str,
+) -> Result<Vec<Vec<StockDaily>>, Box<dyn std::error::Error>> {
+    let mut params: HashMap<String, String> = HashMap::new();
+    params.insert("ts_codes".to_owned(), ts_codes.join(",").to_owned());
+    params.insert("start_date".to_owned(), start_date.to_owned());
+    params.insert("end_date".to_owned(), end_date.to_owned());
+    let api_params = TushareRESTfulAPI {
+        api_name: String::from("stock_basic"),
+        token: token.to_owned(),
+        params: params,
+        fields: String::from("ts_code, symbol, name, area, industry, fullname, enname, cnspell, market, exchange, curr_type, list_status, list_date, delist_date, is_hs"),
+    };
+
+    Ok(vec![vec![]])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -333,7 +384,7 @@ mod tests {
             data_end_date: String::from("20210912"),
         };
         let config = Config::new(args).unwrap();
-        assert_eq!(get_latest_trade_cal(&config).unwrap(), "20210910");
+        assert_eq!(crawl_trade_cal(&config).unwrap().1, "20210910");
     }
 
     #[test]
@@ -376,8 +427,9 @@ mod tests {
             data_end_date: Local::now().format("%Y%m%d").to_string(),
         };
         let config = Config::new(args).unwrap();
+        let token = config.tushare_token;
 
-        let result = get_stock_basic(&config, "SSE", "主板").unwrap();
+        let result = crawl_stock_basic(&token, "SSE", "主板").unwrap();
         let result_len = result.len();
         println!("{}", result_len);
         assert!(result_len >= 1);
@@ -394,9 +446,10 @@ mod tests {
             data_end_date: Local::now().format("%Y%m%d").to_string(),
         };
         let config = &Config::new(args).unwrap();
+        let token = config.tushare_token.clone();
 
         let data_dir = Path::new(&config.data_dir);
-        let trade_date = get_latest_trade_cal(config).unwrap();
+        let trade_date = crawl_trade_cal(config).unwrap().1;
         let date_dir = data_dir.join(trade_date);
 
         // init dir
@@ -405,7 +458,7 @@ mod tests {
         // wrtie stocks_list
         let file_name = date_dir.join("stocks_list");
 
-        let stocks_basic_vec = get_stock_basic(config, "SSE", "主板").unwrap();
+        let stocks_basic_vec = crawl_stock_basic(&token, "SSE", "主板").unwrap();
         let result = write_stocks_list(file_name.to_str().unwrap(), &stocks_basic_vec).unwrap();
         assert_eq!(result, ());
     }
