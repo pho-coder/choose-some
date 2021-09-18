@@ -55,7 +55,7 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
     let stocks_basic = read_stocks_list(file_name_str).unwrap();
 
     // download stocks basic and write local files
-    download_stocks_basic(token, )
+    // download_stocks_daily(token, stocks_basic, earliest_trade_date, latest_trade_date)?;
 
     Ok(())
 }
@@ -224,8 +224,6 @@ impl StockBasic {
     }
 }
 
-fn download_stocks_basic() {}
-
 fn crawl_stocks_basic(
     token: &str,
     exchange: &str,
@@ -335,6 +333,36 @@ fn read_stocks_list(file_name: &str) -> Result<Vec<StockBasic>, MyError> {
     Ok(a_vec)
 }
 
+// max crawl months is 23, if want to crawl 10 codes everytime.
+fn download_stocks_daily(
+    token: &str,
+    stocks_basic: Vec<StockBasic>,
+    start_date: &str,
+    end_date: &str,
+) {
+    info!("will download {} stocks daily", stocks_basic.len());
+    let MAX_CODES = 10;
+    let mut ts_code_grouped: Vec<Vec<String>> = vec![];
+    let mut current_ts_codes_grouped: Vec<String> = vec![];
+    for stock_basic in stocks_basic {
+        if ts_code_grouped.len() == MAX_CODES {
+            ts_code_grouped.push(current_ts_codes_grouped);
+            current_ts_codes_grouped = vec![];
+            current_ts_codes_grouped.push(stock_basic.ts_code);
+        } else {
+            current_ts_codes_grouped.push(stock_basic.ts_code);
+        }
+    }
+    if !current_ts_codes_grouped.is_empty() {
+        ts_code_grouped.push(current_ts_codes_grouped);
+    }
+
+    for ts_codes_group in ts_code_grouped {
+        let stocks_daily_vec =
+            crawl_stocks_daily(token, ts_codes_group, start_date, end_date).unwrap();
+    }
+}
+
 #[derive(Debug)]
 struct StockDaily {
     ts_code: String,
@@ -353,22 +381,77 @@ struct StockDaily {
 // 每分钟内最多调取500次，每次5000条数据. so max crawl months is 23, if want to crawl 10 codes everytime.
 fn crawl_stocks_daily(
     token: &str,
-    ts_codes: Vec<&str>,
+    ts_codes: Vec<String>,
     start_date: &str,
     end_date: &str,
-) -> Result<Vec<Vec<StockDaily>>, Box<dyn std::error::Error>> {
+) -> Result<Vec<StockDaily>, Box<dyn std::error::Error>> {
     let mut params: HashMap<String, String> = HashMap::new();
-    params.insert("ts_codes".to_owned(), ts_codes.join(",").to_owned());
+    params.insert("ts_code".to_owned(), ts_codes.join(",").to_owned());
     params.insert("start_date".to_owned(), start_date.to_owned());
     params.insert("end_date".to_owned(), end_date.to_owned());
     let api_params = TushareRESTfulAPI {
-        api_name: String::from("stock_basic"),
+        api_name: String::from("daily"),
         token: token.to_owned(),
         params: params,
-        fields: String::from("ts_code, symbol, name, area, industry, fullname, enname, cnspell, market, exchange, curr_type, list_status, list_date, delist_date, is_hs"),
+        fields: String::from(
+            "ts_code, trade_date, open, high, low, close, pre_close, change, pct_chg, vol, amount",
+        ),
     };
 
-    Ok(vec![vec![]])
+    let api_params_json = serde_json::to_string(&api_params).unwrap();
+    debug!("{}", api_params_json);
+
+    let client = reqwest::blocking::Client::new();
+    let res = client
+        .post("http://api.waditu.com")
+        .body(api_params_json)
+        .send()?;
+
+    if !res.status().is_success() {
+        return Err(Box::new(MyError(String::from(
+            "get trade cal res status NOT 200!",
+        ))));
+    }
+
+    let res_text_str = res.text()?;
+
+    let api_res: serde_json::Value = serde_json::from_str(&res_text_str)?;
+    // debug!("{}", api_res);
+
+    if api_res["code"] != 0 {
+        return Err(Box::new(MyError(String::from(format!(
+            "get trade cal return code != 0, ={}, request_id: {} , msg: {}",
+            api_res["code"], api_res["request_id"], api_res["msg"]
+        )))));
+    }
+
+    let api_data = &api_res["data"];
+    if api_data["has_more"] != false {
+        return Err(Box::new(MyError(String::from("has more?!"))));
+    }
+
+    let items = &api_data["items"].as_array().unwrap();
+    let mut stocks_daily_vec: Vec<StockDaily> = Vec::new();
+    for i in items.iter() {
+        let stock_daily = StockDaily {
+            ts_code: i[0].as_str().unwrap().to_owned(),
+            trade_date: i[1].as_str().unwrap().to_owned(),
+            open: i[2].as_f64().unwrap().to_owned(),
+            high: i[3].as_f64().unwrap().to_owned(),
+            low: i[4].as_f64().unwrap().to_owned(),
+            close: i[5].as_f64().unwrap().to_owned(),
+            pre_close: i[6].as_f64().unwrap().to_owned(),
+            change: i[7].as_f64().unwrap().to_owned(),
+            pct_chg: i[8].as_f64().unwrap().to_owned(),
+            vol: i[9].as_f64().unwrap().to_owned(),
+            amount: i[10].as_f64().unwrap().to_owned(),
+        };
+        stocks_daily_vec.push(stock_daily);
+    }
+
+    debug!("{:?}", stocks_daily_vec[0]);
+
+    Ok(stocks_daily_vec)
 }
 
 #[cfg(test)]
@@ -429,7 +512,7 @@ mod tests {
         let config = Config::new(args).unwrap();
         let token = config.tushare_token;
 
-        let result = crawl_stock_basic(&token, "SSE", "主板").unwrap();
+        let result = crawl_stocks_basic(&token, "SSE", "主板").unwrap();
         let result_len = result.len();
         println!("{}", result_len);
         assert!(result_len >= 1);
@@ -458,7 +541,7 @@ mod tests {
         // wrtie stocks_list
         let file_name = date_dir.join("stocks_list");
 
-        let stocks_basic_vec = crawl_stock_basic(&token, "SSE", "主板").unwrap();
+        let stocks_basic_vec = crawl_stocks_basic(&token, "SSE", "主板").unwrap();
         let result = write_stocks_list(file_name.to_str().unwrap(), &stocks_basic_vec).unwrap();
         assert_eq!(result, ());
     }
@@ -469,5 +552,22 @@ mod tests {
         env_logger::init();
         let file_name = "/Users/phoenix/data/20210917/stocks_list";
         assert!(read_stocks_list(file_name).unwrap().len() > 1);
+    }
+
+    #[test]
+    fn test_crawl_stocks_daily() {
+        env_logger::init();
+        let args = Opt {
+            data_start_date: String::from("20210101"),
+            data_end_date: String::from("20210901"),
+        };
+        let config = &Config::new(args).unwrap();
+        let token = config.tushare_token.clone();
+        let ts_codes = vec!["689009.SH".to_owned(), "688981.SH".to_owned()];
+        let start_date = "20210901";
+        let end_date = "20210910";
+
+        let stocks_daily_vec = crawl_stocks_daily(&token, ts_codes, start_date, end_date);
+        assert!(stocks_daily_vec.unwrap().len() > 1);
     }
 }
