@@ -2,9 +2,8 @@ use std::env;
 use std::str::FromStr;
 use structopt::StructOpt;
 
-mod crawl_data;
+mod crawl;
 mod models;
-use crawl_data::crawl;
 
 /// download stocks data and analysis for buy or sell.
 #[derive(StructOpt)]
