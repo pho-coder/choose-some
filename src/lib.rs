@@ -3,6 +3,7 @@ use std::str::FromStr;
 use structopt::StructOpt;
 
 mod crawl_data;
+mod models;
 use crawl_data::crawl;
 
 /// download stocks data and analysis for buy or sell.

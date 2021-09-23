@@ -17,7 +17,7 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
-use super::data_struct::{StockBasic, StockDaily, StockDailyBasic, TushareRESTfulAPI};
+use crate::models::{StockBasic, StockDaily, StockDailyBasic, TushareRESTfulAPI};
 
 fn _test_type<T>(_: T) {
     println!("{:?}", { type_name::<T>() });
