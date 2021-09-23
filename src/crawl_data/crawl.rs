@@ -267,7 +267,7 @@ fn download_stocks_daily(
     let mut ts_code_grouped: Vec<Vec<String>> = vec![];
     let mut current_ts_codes_grouped: Vec<String> = vec![];
     for stock_basic in stocks_basic {
-        if ts_code_grouped.len() == max_codes {
+        if current_ts_codes_grouped.len() == max_codes {
             ts_code_grouped.push(current_ts_codes_grouped);
             current_ts_codes_grouped = vec![];
             current_ts_codes_grouped.push(stock_basic.ts_code.clone());
