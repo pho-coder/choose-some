@@ -4,6 +4,7 @@
 /// ----stocks_list , file means stocks list on current day
 /// ----_SUCCESS , file means one download finish
 use crate::Config;
+use crate::DownloadType;
 use log::{debug, info, warn};
 use std::any::type_name;
 use std::collections::HashMap;
@@ -62,6 +63,7 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
         &stocks_basic,
         &earliest_trade_date,
         &latest_trade_date,
+        DownloadType::All,
     )?;
 
     Ok(())
@@ -261,6 +263,7 @@ fn download_stocks_daily(
     stocks_basic: &Vec<StockBasic>,
     start_date: &str,
     end_date: &str,
+    download_type: DownloadType,
 ) -> Result<(), Box<dyn std::error::Error>> {
     info!("will download {} stocks daily", stocks_basic.len());
     let max_codes = 10;
@@ -279,44 +282,49 @@ fn download_stocks_daily(
         ts_code_grouped.push(current_ts_codes_grouped);
     }
 
-    for ts_codes_group in ts_code_grouped.clone() {
-        let stocks_daily_vec =
-            crawl_stocks_daily(token, ts_codes_group.clone(), start_date, end_date).unwrap();
-        for ts_code in ts_codes_group {
-            let file_name = daily_data_dir.join(&ts_code);
-            debug!("{:?}", file_name);
-            let one_stock_daily: Vec<StockDaily> = stocks_daily_vec
-                .iter()
-                .filter(|s| s.ts_code == ts_code.to_string())
-                .cloned()
-                .collect();
-            // write one stock daily data
-            let mut file = fs::File::create(file_name).unwrap();
-            write!(&mut file, "ts_code\ttrade_date\topen\thigh\tlow\tclose\tpre_close\tchange\tpct_chg\tvol\tamount\n").unwrap();
-            for stock_daily in one_stock_daily {
-                let stock_daily_string = stock_daily.to_string();
-                write!(&mut file, "{}{}", stock_daily_string, "\n").unwrap();
+    if download_type == DownloadType::All || download_type == DownloadType::Daily {
+        for ts_codes_group in ts_code_grouped.clone() {
+            let stocks_daily_vec =
+                crawl_stocks_daily(token, ts_codes_group.clone(), start_date, end_date).unwrap();
+            for ts_code in ts_codes_group {
+                let file_name = daily_data_dir.join(&ts_code);
+                debug!("{:?}", file_name);
+                let one_stock_daily: Vec<StockDaily> = stocks_daily_vec
+                    .iter()
+                    .filter(|s| s.ts_code == ts_code.to_string())
+                    .cloned()
+                    .collect();
+                // write one stock daily data
+                let mut file = fs::File::create(file_name).unwrap();
+                write!(&mut file, "ts_code\ttrade_date\topen\thigh\tlow\tclose\tpre_close\tchange\tpct_chg\tvol\tamount\n").unwrap();
+                for stock_daily in one_stock_daily {
+                    let stock_daily_string = stock_daily.to_string();
+                    write!(&mut file, "{}{}", stock_daily_string, "\n").unwrap();
+                }
             }
         }
     }
 
-    for ts_codes_group in ts_code_grouped.clone() {
-        let stocks_daily_basic_vec =
-            crawl_stocks_daily_basic(token, ts_codes_group.clone(), start_date, end_date).unwrap();
-        for ts_code in ts_codes_group {
-            let file_name = daily_basic_data_dir.join(&ts_code);
-            debug!("{:?}", file_name);
-            let one_stock_basic_daily: Vec<StockDailyBasic> = stocks_daily_basic_vec
-                .iter()
-                .filter(|s| s.ts_code == ts_code.to_string())
-                .cloned()
-                .collect();
-            // write one stock daily basic data
-            let mut file = fs::File::create(file_name).unwrap();
-            write!(&mut file, "ts_code\ttrade_date\tclose\tturnover_rate\tturnover_rate_f\tvolume_ratio\tpe\tpe_ttm\tpb\tps\tps_ttm\tdv_ratio\tdv_ttm\ttotal_share\tfloat_share\tfree_share\ttotal_mv\tcirc_mv\tlimit_status\n").unwrap();
-            for stock_daily_basic in one_stock_basic_daily {
-                let stock_daily_basic_string = stock_daily_basic.to_string();
-                write!(&mut file, "{}{}", stock_daily_basic_string, "\n").unwrap();
+    if download_type == DownloadType::All || download_type == DownloadType::DailyBasic {
+        for ts_codes_group in ts_code_grouped.clone() {
+            let stocks_daily_basic_vec =
+                crawl_stocks_daily_basic(token, ts_codes_group.clone(), start_date, end_date)
+                    .unwrap();
+            for ts_code in ts_codes_group {
+                let file_name = daily_basic_data_dir.join(&ts_code);
+                debug!("{:?}", file_name);
+                let one_stock_basic_daily: Vec<StockDailyBasic> = stocks_daily_basic_vec
+                    .iter()
+                    .filter(|s| s.ts_code == ts_code.to_string())
+                    .cloned()
+                    .collect();
+                // write one stock daily basic data
+                let mut file = fs::File::create(file_name).unwrap();
+                write!(&mut file, "ts_code\ttrade_date\tclose\tturnover_rate\tturnover_rate_f\tvolume_ratio\tpe\tpe_ttm\tpb\tps\tps_ttm\tdv_ratio\tdv_ttm\ttotal_share\tfloat_share\tfree_share\ttotal_mv\tcirc_mv\tlimit_status\n").unwrap();
+                for stock_daily_basic in one_stock_basic_daily {
+                    let stock_daily_basic_string = stock_daily_basic.to_string();
+                    write!(&mut file, "{}{}", stock_daily_basic_string, "\n").unwrap();
+                }
             }
         }
     }
@@ -476,7 +484,11 @@ fn crawl_stocks_daily_basic(
             } else {
                 Some(i[7].as_f64().unwrap().to_owned())
             },
-            pb: i[8].as_f64().unwrap().to_owned(),
+            pb: if i[8].is_null() {
+                None
+            } else {
+                Some(i[8].as_f64().unwrap().to_owned())
+            },
             ps: i[9].as_f64().unwrap().to_owned(),
             ps_ttm: i[10].as_f64().unwrap().to_owned(),
             dv_ratio: if i[11].is_null() {
@@ -511,7 +523,7 @@ fn crawl_stocks_daily_basic(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Opt;
+    use crate::{DownloadType, Opt};
 
     #[test]
     #[ignore]
@@ -519,6 +531,7 @@ mod tests {
         let args = Opt {
             data_start_date: String::from("20210101"),
             data_end_date: String::from("20210912"),
+            download_type: DownloadType::All,
         };
         let config = Config::new(args).unwrap();
         assert_eq!(crawl_trade_cal(&config).unwrap().1, "20210910");
@@ -531,6 +544,7 @@ mod tests {
         let args = Opt {
             data_start_date: String::from("20210101"),
             data_end_date: String::from("20210912"),
+            download_type: DownloadType::All,
         };
         let config = Config::new(args).unwrap();
         let date_dir = Path::new(&config.data_dir).join("20990101".to_owned());
@@ -547,6 +561,7 @@ mod tests {
         let args = Opt {
             data_start_date: String::from("20210101"),
             data_end_date: Local::now().format("%Y%m%d").to_string(),
+            download_type: DownloadType::All,
         };
         let config = Config::new(args).unwrap();
 
@@ -562,6 +577,7 @@ mod tests {
         let args = Opt {
             data_start_date: String::from("20210101"),
             data_end_date: Local::now().format("%Y%m%d").to_string(),
+            download_type: DownloadType::All,
         };
         let config = Config::new(args).unwrap();
         let token = config.tushare_token;
@@ -581,6 +597,7 @@ mod tests {
         let args = Opt {
             data_start_date: String::from("20210101"),
             data_end_date: Local::now().format("%Y%m%d").to_string(),
+            download_type: DownloadType::All,
         };
         let config = &Config::new(args).unwrap();
         let token = config.tushare_token.clone();
@@ -614,6 +631,7 @@ mod tests {
         let args = Opt {
             data_start_date: String::from("20210101"),
             data_end_date: String::from("20210901"),
+            download_type: DownloadType::All,
         };
         let config = &Config::new(args).unwrap();
         let token = config.tushare_token.clone();
@@ -631,6 +649,7 @@ mod tests {
         let args = Opt {
             data_start_date: String::from("20210101"),
             data_end_date: String::from("20210901"),
+            download_type: DownloadType::All,
         };
         let config = &Config::new(args).unwrap();
         let token = config.tushare_token.clone();
@@ -649,6 +668,7 @@ mod tests {
         let args = Opt {
             data_start_date: String::from("20210101"),
             data_end_date: String::from("20210917"),
+            download_type: DownloadType::All,
         };
         let config = &Config::new(args).unwrap();
         let token = config.tushare_token.clone();
@@ -668,7 +688,8 @@ mod tests {
                 &token,
                 stocks_basic,
                 start_date,
-                end_date
+                end_date,
+                DownloadType::All,
             )
             .unwrap(),
             ()

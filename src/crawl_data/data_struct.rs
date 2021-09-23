@@ -139,7 +139,7 @@ pub struct StockDailyBasic {
     pub volume_ratio: Option<f64>,
     pub pe: Option<f64>,
     pub pe_ttm: Option<f64>,
-    pub pb: f64,
+    pub pb: Option<f64>,
     pub ps: f64,
     pub ps_ttm: f64,
     pub dv_ratio: Option<f64>,
@@ -175,7 +175,11 @@ impl StockDailyBasic {
             } else {
                 self.pe_ttm.unwrap().to_string()
             },
-            self.pb.to_string(),
+            if self.pb.is_none() {
+                "none".to_owned()
+            } else {
+                self.pb.unwrap().to_string()
+            },
             self.ps.to_string(),
             self.ps_ttm.to_string(),
             if self.dv_ratio.is_none() {
