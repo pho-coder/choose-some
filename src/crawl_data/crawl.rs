@@ -39,7 +39,7 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
     let date_dir = data_dir.join(&latest_trade_date);
 
     // init dir
-    let (daily_data_dir, daily_basic_dir) = init_dir(&date_dir)?;
+    init_dir(&date_dir)?;
 
     let token = config.tushare_token.to_owned();
     // get stocks list
@@ -57,13 +57,12 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
 
     // download stocks daily and basic and write local files
     download_stocks_daily(
-        &daily_data_dir,
-        &daily_basic_dir,
+        &date_dir,
         &token,
         &stocks_basic,
         &earliest_trade_date,
         &latest_trade_date,
-        DownloadType::All,
+        config.download_type,
     )?;
 
     Ok(())
@@ -128,7 +127,7 @@ fn crawl_trade_cal(config: &Config) -> Result<(String, String), Box<dyn std::err
     ))
 }
 
-fn init_dir(date_dir: &PathBuf) -> Result<(PathBuf, PathBuf), Box<dyn Error>> {
+fn init_dir(date_dir: &PathBuf) -> Result<(), Box<dyn Error>> {
     debug!("{:?}", date_dir);
 
     if date_dir.exists() {
@@ -143,7 +142,7 @@ fn init_dir(date_dir: &PathBuf) -> Result<(PathBuf, PathBuf), Box<dyn Error>> {
     let daily_basic_data_dir = date_dir.join("daily_basic_data");
     fs::create_dir(&daily_basic_data_dir).unwrap();
 
-    Ok((daily_data_dir, daily_basic_data_dir))
+    Ok(())
 }
 
 fn crawl_stocks_basic(
@@ -257,8 +256,7 @@ fn read_stocks_list(file_name: &PathBuf) -> Result<Vec<StockBasic>, MyError> {
 
 // max crawl months is 23, if want to crawl 10 codes everytime.
 fn download_stocks_daily(
-    daily_data_dir: &PathBuf,
-    daily_basic_data_dir: &PathBuf,
+    date_dir: &PathBuf,
     token: &str,
     stocks_basic: &Vec<StockBasic>,
     start_date: &str,
@@ -283,6 +281,7 @@ fn download_stocks_daily(
     }
 
     if download_type == DownloadType::All || download_type == DownloadType::Daily {
+        let daily_data_dir = date_dir.join("daily_data");
         for ts_codes_group in ts_code_grouped.clone() {
             let stocks_daily_vec =
                 crawl_stocks_daily(token, ts_codes_group.clone(), start_date, end_date).unwrap();
@@ -306,6 +305,7 @@ fn download_stocks_daily(
     }
 
     if download_type == DownloadType::All || download_type == DownloadType::DailyBasic {
+        let daily_basic_data_dir = date_dir.join("daily_basic_data");
         for ts_codes_group in ts_code_grouped.clone() {
             let stocks_daily_basic_vec =
                 crawl_stocks_daily_basic(token, ts_codes_group.clone(), start_date, end_date)
@@ -328,6 +328,19 @@ fn download_stocks_daily(
             }
         }
     }
+
+    // write finish file _SUCCESS
+    let mut file = fs::File::create(date_dir.join("_SUCCESS")).unwrap();
+    let mut result_vec: Vec<&str> = vec![];
+    if download_type == DownloadType::All {
+        result_vec = vec!["daily", "daily_basic"];
+    } else if download_type == DownloadType::Daily {
+        result_vec = vec!["daily"];
+    } else if download_type == DownloadType::Daily {
+        result_vec = vec!["daily_basic"];
+    }
+    let result_str = result_vec.join("\n");
+    file.write_all(result_str.as_bytes()).unwrap();
 
     Ok(())
 }
@@ -468,7 +481,11 @@ fn crawl_stocks_daily_basic(
             trade_date: i[1].as_str().unwrap().to_owned(),
             close: i[2].as_f64().unwrap().to_owned(),
             turnover_rate: i[3].as_f64().unwrap().to_owned(),
-            turnover_rate_f: i[4].as_f64().unwrap().to_owned(),
+            turnover_rate_f: if i[4].is_null() {
+                None
+            } else {
+                Some(i[4].as_f64().unwrap().to_owned())
+            },
             volume_ratio: if i[5].is_null() {
                 None
             } else {
@@ -489,8 +506,16 @@ fn crawl_stocks_daily_basic(
             } else {
                 Some(i[8].as_f64().unwrap().to_owned())
             },
-            ps: i[9].as_f64().unwrap().to_owned(),
-            ps_ttm: i[10].as_f64().unwrap().to_owned(),
+            ps: if i[9].is_null() {
+                None
+            } else {
+                Some(i[9].as_f64().unwrap().to_owned())
+            },
+            ps_ttm: if i[10].is_null() {
+                None
+            } else {
+                Some(i[10].as_f64().unwrap().to_owned())
+            },
             dv_ratio: if i[11].is_null() {
                 None
             } else {
@@ -549,7 +574,7 @@ mod tests {
         let config = Config::new(args).unwrap();
         let date_dir = Path::new(&config.data_dir).join("20990101".to_owned());
 
-        assert_eq!(init_dir(&date_dir).unwrap().0, date_dir.join("daily_data"));
+        assert_eq!(init_dir(&date_dir).unwrap(), ());
     }
 
     #[test]
@@ -674,17 +699,14 @@ mod tests {
         let token = config.tushare_token.clone();
         let start_date = "20210901";
         let end_date = "20210917";
-        let daily_data_dir = PathBuf::from(config.data_dir.clone() + "/20210917/daily_data");
-        let daily_basic_data_dir =
-            PathBuf::from(config.data_dir.clone() + "/20210917/daily_basic_data");
+        let date_dir = PathBuf::from(config.data_dir.clone() + "/20210917");
 
         let file_name = PathBuf::from("/Users/phoenix/data/20210917/stocks_list");
         let stocks_basic = &read_stocks_list(&file_name).unwrap()[..10].to_vec();
 
         assert_eq!(
             download_stocks_daily(
-                &daily_data_dir,
-                &daily_basic_data_dir,
+                &date_dir,
                 &token,
                 stocks_basic,
                 start_date,

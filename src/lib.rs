@@ -29,7 +29,7 @@ pub struct Config {
     pub download_type: DownloadType,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum DownloadType {
     All,
     Daily,

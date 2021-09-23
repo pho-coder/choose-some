@@ -135,13 +135,13 @@ pub struct StockDailyBasic {
     pub trade_date: String,
     pub close: f64,
     pub turnover_rate: f64,
-    pub turnover_rate_f: f64,
+    pub turnover_rate_f: Option<f64>,
     pub volume_ratio: Option<f64>,
     pub pe: Option<f64>,
     pub pe_ttm: Option<f64>,
     pub pb: Option<f64>,
-    pub ps: f64,
-    pub ps_ttm: f64,
+    pub ps: Option<f64>,
+    pub ps_ttm: Option<f64>,
     pub dv_ratio: Option<f64>,
     pub dv_ttm: Option<f64>,
     pub total_share: f64,
@@ -159,7 +159,11 @@ impl StockDailyBasic {
             String::from(self.trade_date.clone()),
             self.close.to_string(),
             self.turnover_rate.to_string(),
-            self.turnover_rate_f.to_string(),
+            if self.turnover_rate_f.is_none() {
+                "none".to_owned()
+            } else {
+                self.turnover_rate_f.unwrap().to_string()
+            },
             if self.volume_ratio.is_none() {
                 "none".to_owned()
             } else {
@@ -180,8 +184,16 @@ impl StockDailyBasic {
             } else {
                 self.pb.unwrap().to_string()
             },
-            self.ps.to_string(),
-            self.ps_ttm.to_string(),
+            if self.ps.is_none() {
+                "none".to_owned()
+            } else {
+                self.ps.unwrap().to_string()
+            },
+            if self.ps_ttm.is_none() {
+                "none".to_owned()
+            } else {
+                self.ps_ttm.unwrap().to_string()
+            },
             if self.dv_ratio.is_none() {
                 "none".to_owned()
             } else {
