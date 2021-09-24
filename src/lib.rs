@@ -2,6 +2,7 @@ use std::env;
 use std::str::FromStr;
 use structopt::StructOpt;
 
+mod analysis;
 mod crawl;
 mod models;
 
@@ -82,10 +83,11 @@ impl Config {
 
 pub fn run(config: &Config) -> Result<(), String> {
     println!("{} {}", config.data_start_date, config.data_end_date);
-    if let Err(e) = crawl::run(config) {
-        eprintln!("Application error: {}", e);
-        return Err("crawl error!".to_owned());
-    }
+    let (earliest_trade_date, latest_trade_date) = crawl::run(config).unwrap();
+    config.data_start_date = earliest_trade_date;
+    config.data_end_date = latest_trade_date;
+    println!("{} {}", config.data_start_date, config.data_end_date);
+    analysis::run(config).unwrap();
 
     Ok(())
 }

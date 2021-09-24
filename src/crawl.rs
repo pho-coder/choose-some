@@ -32,7 +32,7 @@ impl fmt::Display for MyError {
 }
 impl Error for MyError {}
 
-pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
+pub fn run(config: &Config) -> Result<(String, String), Box<dyn Error>> {
     info!("{} {}", config.data_start_date, config.data_end_date);
     let data_dir = Path::new(&config.data_dir);
     let (earliest_trade_date, latest_trade_date) = crawl_trade_cal(config).unwrap();
@@ -65,7 +65,7 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
         config.download_type,
     )?;
 
-    Ok(())
+    Ok((earliest_trade_date, latest_trade_date))
 }
 
 fn crawl_trade_cal(config: &Config) -> Result<(String, String), Box<dyn std::error::Error>> {
@@ -590,7 +590,7 @@ mod tests {
         };
         let config = Config::new(args).unwrap();
 
-        assert_eq!(run(&config).unwrap(), ());
+        assert_eq!(run(&config).unwrap().0, "20210101");
     }
 
     #[test]

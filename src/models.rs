@@ -221,3 +221,8 @@ impl StockDailyBasic {
         self.to_vec().join("\t")
     }
 }
+
+pub struct AnalysisResult {
+    pub finish: bool,
+    pub good: bool,
+}
