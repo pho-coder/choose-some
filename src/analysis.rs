@@ -49,10 +49,6 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_check_data() {}
-
-    #[test]
-    #[ignore]
     fn test_run() {
         let config = get_config();
         assert_eq!(run(&config).unwrap().finish, true);

@@ -226,3 +226,45 @@ pub struct AnalysisResult {
     pub finish: bool,
     pub good: bool,
 }
+
+#[derive(Debug, Clone)]
+pub struct Position {
+    pub ts_code: String,
+    pub trade_date: String,
+    pub price: i64,
+    pub volume: i64,
+}
+
+#[derive(Debug, Clone)]
+pub struct Wallet {
+    pub start_date: String,
+    pub start_value: i64,
+    pub current_positions: Vec<Position>,
+}
+
+impl Wallet {
+    pub fn new(start_date: String, start_value: i64) -> Wallet {
+        let current_positions: Vec<Position> = Vec::new();
+        Wallet {
+            start_date,
+            start_value,
+            current_positions,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore]
+    fn test_new_wallet() {
+        let start_date = String::from("20190101");
+        let start_value = 100;
+        let wallet = Wallet::new(start_date.clone(), start_value);
+        assert_eq!(wallet.start_date, start_date);
+        assert_eq!(wallet.start_value, start_value);
+        assert_eq!(wallet.current_positions.len(), 0);
+    }
+}
