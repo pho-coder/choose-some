@@ -25,7 +25,12 @@ pub fn run(config: &Config) -> Result<AnalysisResult, Box<dyn Error>> {
 }
 
 pub fn check_data(date_dir: &PathBuf) -> bool {
-    false
+    // check whether file "_SUCCESS" in date_dir
+    let success_file = date_dir.join("_SUCCESS");
+    if !success_file.exists() {
+        return false;
+    }
+    true
 }
 
 #[cfg(test)]
@@ -51,5 +56,13 @@ mod tests {
     fn test_run() {
         let config = get_config();
         assert_eq!(run(&config).unwrap().finish, true);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_check_data_true() {
+        let config = get_config();
+        let data_dir = Path::new(&config.data_dir).join(&config.data_end_date);
+        assert_eq!(check_data(&data_dir), true);
     }
 }

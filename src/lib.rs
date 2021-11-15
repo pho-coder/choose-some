@@ -81,7 +81,7 @@ impl Config {
     }
 }
 
-pub fn run(config: &Config) -> Result<(), String> {
+pub fn run(config: &mut Config) -> Result<(), String> {
     println!("{} {}", config.data_start_date, config.data_end_date);
     let (earliest_trade_date, latest_trade_date) = crawl::run(config).unwrap();
     config.data_start_date = earliest_trade_date;
