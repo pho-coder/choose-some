@@ -5,6 +5,12 @@ use structopt::StructOpt;
 mod analysis;
 mod crawl;
 mod models;
+mod metrics;
+mod test2;
+mod test1;
+mod test3;
+mod test;
+pub mod testt;
 
 /// download stocks data and analysis for buy or sell.
 #[derive(StructOpt)]
